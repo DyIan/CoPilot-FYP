@@ -286,7 +286,8 @@ class World(object):
             spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
             self.show_vehicle_telemetry = False
-            self.modify_vehicle_physics(self.player)
+            self.modify_vehicle_physics(self.player)        # If a spawn point cant be found it will just spawn in a random area, BUT we need to publish either way
+            self.broker.publish("player_change", self.player)
         # Set up the sensors.
         self.collision_sensor = CollisionSensor(self.player, self.hud)
         self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
@@ -377,11 +378,10 @@ class World(object):
 
 class KeyboardControl(object):
     """Class that handles keyboard input."""
-    def __init__(self, world, start_in_autopilot, commander=None):
+    def __init__(self, world, start_in_autopilot):
         self._autopilot_enabled = start_in_autopilot
         self._ackermann_enabled = False
         self._ackermann_reverse = 1
-        self.commander = commander
         if isinstance(world.player, carla.Vehicle):
             self._control = carla.VehicleControl()
             self._ackermann_control = carla.VehicleAckermannControl()
@@ -417,14 +417,8 @@ class KeyboardControl(object):
                         world.player.set_autopilot(False)
                         world.restart()
                         world.player.set_autopilot(True)
-
-                        # Make sure the commander script knows too
-                       # if self.commander is not None:
-                            #self.commander.update_player(world.player)
                     else:
                         world.restart()
-                        #if self.commander is not None:
-                            #self.commander.update_player(world.player)
                 elif event.key == K_F1:
                     world.hud.toggle_info()
                 elif event.key == K_v and pygame.key.get_mods() & KMOD_SHIFT:
@@ -1239,7 +1233,6 @@ class CameraManager(object):
         
         # Creating the publisher to publish the frames
         try: 
-            # Since we arent in world class we need to get the world object 
             
             self.world.broker.publish("camera", image)
         except:
@@ -1328,17 +1321,22 @@ def game_loop(args):
 
         from commander import Commander
         from object_detection import Object_Detection
+        from speed_control import Speed_Control
 
         print("Setting up subscribers...")
         commander = Commander(world, world.player)
         object_detection = Object_Detection()
+        speed_control = Speed_Control(world.broker)
+
+        commander.register(world.broker)
 
         # Subscribers
         world.broker.subscribe("player_change", commander.update_player)
         world.broker.subscribe("camera", object_detection.callback)
+        world.broker.subscribe("speed", speed_control.speed_callback)
 
         # Pass the commander so it can update if actor gets destroyed
-        controller = KeyboardControl(world, args.autopilot, commander)
+        controller = KeyboardControl(world, args.autopilot)
 
         
 
@@ -1356,11 +1354,15 @@ def game_loop(args):
             if controller.parse_events(client, world, clock, args.sync):
                 return
             
-            # Get the keyboard input here
+            # Publish the keyboard command
             keyboard_command = controller.get_keyboard_control()
+            world.broker.publish("keyboard", keyboard_command)
 
+            # Publish the car velocity
+            velocity = world.player.get_velocity()
+            world.broker.publish("speed", velocity)
             # Update both keyboard command and perception command
-            commander.update_keyboard(keyboard_command)
+            #commander.update_keyboard(keyboard_command)
              # Update the percetion command when done commander.update_perception()
             
             # Apply the command 
