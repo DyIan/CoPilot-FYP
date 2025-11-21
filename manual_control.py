@@ -56,7 +56,7 @@ Use ARROWS or WASD keys for control.
 
 from __future__ import print_function
 
-
+from broker import Broker
 # ==============================================================================
 # -- find carla module ---------------------------------------------------------
 # ==============================================================================
@@ -195,6 +195,7 @@ class World(object):
         self.world = carla_world
         self.sync = args.sync
         self.actor_role_name = args.rolename
+        self.broker = Broker()
         try:
             self.map = self.world.get_map()
         except RuntimeError as error:
@@ -272,6 +273,8 @@ class World(object):
             spawn_point.rotation.pitch = 0.0
             self.destroy()
             self.player = self.world.try_spawn_actor(blueprint, spawn_point)
+
+            self.broker.publish("player_change", self.player)
             self.show_vehicle_telemetry = False
             self.modify_vehicle_physics(self.player)
         while self.player is None:
@@ -289,7 +292,7 @@ class World(object):
         self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
         self.gnss_sensor = GnssSensor(self.player)
         self.imu_sensor = IMUSensor(self.player)
-        self.camera_manager = CameraManager(self.player, self.hud, self._gamma)
+        self.camera_manager = CameraManager(self, self.player, self.hud, self._gamma)
         self.camera_manager.transform_index = cam_pos_index
         self.camera_manager.set_sensor(cam_index, notify=False)
         actor_type = get_actor_display_name(self.player)
@@ -416,12 +419,12 @@ class KeyboardControl(object):
                         world.player.set_autopilot(True)
 
                         # Make sure the commander script knows too
-                        if self.commander is not None:
-                            self.commander.update_player(world.player)
+                       # if self.commander is not None:
+                            #self.commander.update_player(world.player)
                     else:
                         world.restart()
-                        if self.commander is not None:
-                            self.commander.update_player(world.player)
+                        #if self.commander is not None:
+                            #self.commander.update_player(world.player)
                 elif event.key == K_F1:
                     world.hud.toggle_info()
                 elif event.key == K_v and pygame.key.get_mods() & KMOD_SHIFT:
@@ -1123,10 +1126,11 @@ class RadarSensor(object):
 
 
 class CameraManager(object):
-    def __init__(self, parent_actor, hud, gamma_correction):
+    def __init__(self, world, parent_actor, hud, gamma_correction):
         self.sensor = None
         self.surface = None
         self._parent = parent_actor
+        self.world = world
         self.hud = hud
         self.recording = False
         bound_x = 0.5 + self._parent.bounding_box.extent.x
@@ -1211,7 +1215,7 @@ class CameraManager(object):
             # We need to pass the lambda a weak reference to self to avoid
             # circular reference.
             weak_self = weakref.ref(self)
-            self.sensor.listen(lambda image: CameraManager._parse_image(weak_self, image))
+            self.sensor.listen(lambda image: CameraManager._parse_image(weak_self, image))      ## Every frame comes here and goes to parse_img
         if notify:
             self.hud.notification(self.sensors[index][2])
         self.index = index
@@ -1232,6 +1236,16 @@ class CameraManager(object):
         self = weak_self()
         if not self:
             return
+        
+        # Creating the publisher to publish the frames
+        try: 
+            # Since we arent in world class we need to get the world object 
+            
+            self.world.broker.publish("camera", image)
+        except:
+            print("Error occured getting world for camera")
+            pass
+
         if self.sensors[self.index][0].startswith('sensor.lidar'):
             points = np.frombuffer(image.raw_data, dtype=np.dtype('f4'))
             points = np.reshape(points, (int(points.shape[0] / 4), 4))
@@ -1313,7 +1327,15 @@ def game_loop(args):
         world = World(sim_world, hud, args)
 
         from commander import Commander
+        from object_detection import Object_Detection
+
+        print("Setting up subscribers...")
         commander = Commander(world, world.player)
+        object_detection = Object_Detection()
+
+        # Subscribers
+        world.broker.subscribe("player_change", commander.update_player)
+        world.broker.subscribe("camera", object_detection.callback)
 
         # Pass the commander so it can update if actor gets destroyed
         controller = KeyboardControl(world, args.autopilot, commander)
