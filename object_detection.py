@@ -9,13 +9,11 @@ class Object_Detection:
 
     def callback(self, image: carla.Image):
         """ Runs everytime a new image from the sensor comes in """
-        #print(f"Received image: {image.width}x{image.height}, frame: {image.frame}")
-        # Must convert from CARLA BGRA to numpy RGB
-        array = np.frombuffer(image.raw_data, dtype=np.uint8)
-        array = array.reshape((image.height, image.width, 4))
+
+        array = np.frombuffer(image.raw_data, dtype=np.uint8)   # Takes in the data as 1d buffer
+        array = array.reshape((image.height, image.width, 4))   # Reshapes it to 4d
 
         frame = array[:, :, :3]  # Keep only the colour
-        #frame = frame[:, :, ::-1] # Reverse to RGB
         self.image = frame
 
         cv2.imshow("Camera Test", self.image)

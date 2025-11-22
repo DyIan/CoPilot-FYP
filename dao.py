@@ -14,27 +14,31 @@ class DAO:
         
 
     def gps_callback(self, coords):
+        """ Game loop publishes GPS coords every second"""
         x, y = coords
 
+        # Since CARLA doesnt do real coords we will just make up our own based on area
         # Back Half Medium 50km/h
         if -120 <= x <= -62 and -76.0 <= y <= 146.0:
             self.long = -6.2395
             self.lat = 53.46446
 
 
-        # Middle Fast 100 hm/h
+        # Middle Fast 90 hm/h
         elif -63 <= x <= -34.5 and -76.0 <= y <= 146.0:
             self.long = -6.202502
             self.lat = 53.469158
 
-        # Top and hood 30km/h
+        # Top and neighbourhood 30km/h
         else:
             self.long = -6.2522
             self.lat = 53.4603
         
+        # Check the db now for speed limit in this area
         self.update_speed_limit()
 
     def update_speed_limit(self):
+        """ Takes self.long/lat and checks database for nearest speed limit from those coords and then publishes to 'speed_limit' """
         try:
             self.cursor.execute("SELECT * FROM find_speed_limit (%s, %s)", (self.long, self.lat))
             result = self.cursor.fetchone()
