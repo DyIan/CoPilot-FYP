@@ -1322,10 +1322,12 @@ def game_loop(args):
         from commander import Commander
         from object_detection import Object_Detection
         from speed_control import Speed_Control
+        from dao import DAO
 
         print("Setting up subscribers...")
         commander = Commander(world, world.player)
         object_detection = Object_Detection()
+        dao = DAO(world.broker)
         speed_control = Speed_Control(world.broker)
 
         commander.register(world.broker)
@@ -1361,6 +1363,14 @@ def game_loop(args):
             # Publish the car velocity
             velocity = world.player.get_velocity()
             world.broker.publish("speed", velocity)
+
+            location = world.player.get_transform().location
+
+            long = location.x
+            lat = location.y
+            
+
+            world.broker.publish("gps", (long, lat))
             # Update both keyboard command and perception command
             #commander.update_keyboard(keyboard_command)
              # Update the percetion command when done commander.update_perception()
