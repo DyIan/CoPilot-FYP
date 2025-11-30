@@ -1369,8 +1369,9 @@ def game_loop(args):
             long = location.x
             lat = location.y
             
-
             world.broker.publish("gps", (long, lat))
+
+            object_detection.process_image()
             # Update both keyboard command and perception command
             #commander.update_keyboard(keyboard_command)
              # Update the percetion command when done commander.update_perception()
