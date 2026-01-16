@@ -1323,12 +1323,14 @@ def game_loop(args):
         from object_detection import Object_Detection
         from speed_control import Speed_Control
         from dao import DAO
+        from lane_detection import Lane_Detection
 
         print("Setting up subscribers...")
         commander = Commander(world, world.player)
         object_detection = Object_Detection()
         dao = DAO(world.broker)
         speed_control = Speed_Control(world.broker)
+        lane_detection = Lane_Detection()
 
         commander.register(world.broker)
 
@@ -1336,6 +1338,7 @@ def game_loop(args):
         world.broker.subscribe("player_change", commander.update_player)
         world.broker.subscribe("camera", object_detection.callback)
         world.broker.subscribe("speed", speed_control.speed_callback)
+        world.broker.subscribe("camera", lane_detection.callback)
 
         # Pass the commander so it can update if actor gets destroyed
         controller = KeyboardControl(world, args.autopilot)
@@ -1372,6 +1375,7 @@ def game_loop(args):
             world.broker.publish("gps", (long, lat))
 
             object_detection.process_image()
+            lane_detection.process_image()
             # Update both keyboard command and perception command
             #commander.update_keyboard(keyboard_command)
              # Update the percetion command when done commander.update_perception()
