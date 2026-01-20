@@ -147,7 +147,7 @@ except ImportError:
 # ==============================================================================
 # -- Global functions ----------------------------------------------------------
 # ==============================================================================
-
+COLLECT_DATA = True
 
 def find_weather_presets():
     rgx = re.compile('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)')
@@ -299,6 +299,8 @@ class World(object):
         actor_type = get_actor_display_name(self.player)
         self.hud.notification(actor_type)
 
+        self.training_sensors = TrainingSensors(self.world, self.player)
+
         if self.sync:
             self.world.tick()
         else:
@@ -362,7 +364,9 @@ class World(object):
             self.collision_sensor.sensor,
             self.lane_invasion_sensor.sensor,
             self.gnss_sensor.sensor,
-            self.imu_sensor.sensor]
+            self.imu_sensor.sensor,
+            self.training_sensors.sensors[0], self.training_sensors.sensors[1]
+            ]
         for sensor in sensors:
             if sensor is not None:
                 sensor.stop()
@@ -1132,10 +1136,11 @@ class CameraManager(object):
         bound_z = 0.5 + self._parent.bounding_box.extent.z
         Attachment = carla.AttachmentType
 
+        #(carla.Transform(carla.Location(x=+0.8*bound_x, y=+0.0*bound_y, z=1.3*bound_z)), Attachment.Rigid),
         if not self._parent.type_id.startswith("walker.pedestrian"):
             self._camera_transforms = [
                 (carla.Transform(carla.Location(x=-2.0*bound_x, y=+0.0*bound_y, z=2.0*bound_z), carla.Rotation(pitch=8.0)), Attachment.SpringArmGhost),
-                (carla.Transform(carla.Location(x=+0.8*bound_x, y=+0.0*bound_y, z=1.3*bound_z)), Attachment.Rigid),
+                (carla.Transform(carla.Location(x=+0.8*bound_x, y=+0.0*bound_y, z=1.6*bound_z)), Attachment.Rigid),
                 (carla.Transform(carla.Location(x=+1.9*bound_x, y=+1.0*bound_y, z=1.2*bound_z)), Attachment.SpringArmGhost),
                 (carla.Transform(carla.Location(x=-2.8*bound_x, y=+0.0*bound_y, z=4.6*bound_z), carla.Rotation(pitch=6.0)), Attachment.SpringArmGhost),
                 (carla.Transform(carla.Location(x=-1.0, y=-1.0*bound_y, z=0.4*bound_z)), Attachment.Rigid)]
@@ -1146,7 +1151,7 @@ class CameraManager(object):
                 (carla.Transform(carla.Location(x=2.5, y=0.5, z=0.0), carla.Rotation(pitch=-8.0)), Attachment.SpringArmGhost),
                 (carla.Transform(carla.Location(x=-4.0, z=2.0), carla.Rotation(pitch=6.0)), Attachment.SpringArmGhost),
                 (carla.Transform(carla.Location(x=0, y=-2.5, z=-0.0), carla.Rotation(yaw=90.0)), Attachment.Rigid)]
-
+        
         self.transform_index = 1
         self.sensors = [
             ['sensor.camera.rgb', cc.Raw, 'Camera RGB', {}],
@@ -1278,6 +1283,108 @@ class CameraManager(object):
         if self.recording:
             image.save_to_disk('_out/%08d' % image.frame)
 
+# =============================================================================
+# -- Added Sensors ------------------------------------------------------------
+# =============================================================================
+class TrainingSensors(object):
+    def __init__(self, world, vehicle):
+        self.world = world
+        self.vehicle = vehicle
+        self.sensors = []   # Holds the rgb and segmennt sensor
+
+        self.frame_buffer = {}
+
+        bbox = self.vehicle.bounding_box
+        self.bound_x = 0.5 + bbox.extent.x
+        self.bound_y = 0.5 + bbox.extent.y
+        self.bound_z = 0.5 + bbox.extent.z
+
+        self._spawn_sensors()
+        
+
+    def _spawn_sensors(self):
+        bp_library = self.world.get_blueprint_library()
+        #transform = carla.Transform(carla.Location(x=1.5, z=1.7), carla.Rotation(pitch= -5))
+
+        transform = carla.Transform(carla.Location(x=+0.8*self.bound_x, y=+0.0*self.bound_y, z=1.6*self.bound_z), carla.Rotation(pitch=0.0))
+        # RGB Sensor
+        rgb_bp = bp_library.find('sensor.camera.rgb')
+        rgb_bp.set_attribute("image_size_x", "1024")
+        rgb_bp.set_attribute("image_size_y", "512")
+        rgb_bp.set_attribute("fov", "90")
+
+        self.rgb = self.world.spawn_actor(rgb_bp, transform, attach_to=self.vehicle)
+        self.rgb.listen(self.rgb_callback)
+        self.sensors.append(self.rgb)
+
+
+        # Segmenting Sensor
+        seg_bp = bp_library.find('sensor.camera.semantic_segmentation')
+        seg_bp.set_attribute("image_size_x", "1024")
+        seg_bp.set_attribute("image_size_y", "512")
+        seg_bp.set_attribute("fov", "90")
+        
+        self.seg = self.world.spawn_actor(seg_bp, transform, attach_to=self.vehicle)
+        self.seg.listen(self.seg_callback)
+        self.sensors.append(self.seg)
+
+
+    # Used for collecting data, just uncomment to save photos
+    def rgb_callback(self, image):
+        
+        frame = image.frame
+
+        if frame not in self.frame_buffer:
+            self.frame_buffer[frame] = {}
+
+        self.frame_buffer[frame]['rgb'] = image
+
+        self.try_save(frame)
+        
+        return
+
+
+    def seg_callback(self, image):
+        
+        frame = image.frame
+
+        image.convert(carla.ColorConverter.CityScapesPalette)
+        
+        if frame not in self.frame_buffer:
+            self.frame_buffer[frame] = {}
+
+        self.frame_buffer[frame]['seg'] = image
+
+        self.try_save(frame)
+        
+        return
+
+    def try_save(self, frame):
+        
+        # Only take every 5th frame
+        if frame % 5 != 0:
+            # Remove frame 
+            if frame in self.frame_buffer:
+                del self.frame_buffer[frame]
+            return
+        
+        entry = self.frame_buffer.get(frame)
+        if entry and 'rgb' in entry and 'seg' in entry:
+            rgb = entry['rgb']
+            seg = entry['seg']
+
+            rgb.save_to_disk(f'data/rgb/{frame+20000}.png')
+            seg.save_to_disk(f'data/seg/{frame+20000}.png')
+
+            del self.frame_buffer[frame]
+
+
+    
+    def destroy(self):
+        for sensor in self.sensors:
+            sensor.stop()
+            sensor.destroy()
+
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
@@ -1300,7 +1407,7 @@ def game_loop(args):
             settings = sim_world.get_settings()
             if not settings.synchronous_mode:
                 settings.synchronous_mode = True
-                settings.fixed_delta_seconds = 0.05
+            settings.fixed_delta_seconds = 0.05   
             sim_world.apply_settings(settings)
 
             traffic_manager = client.get_trafficmanager()
@@ -1437,7 +1544,7 @@ def main():
     argparser.add_argument(
         '--filter',
         metavar='PATTERN',
-        default='vehicle.*',
+        default='vehicle.dodge.charger_2020',
         help='actor filter (default: "vehicle.*")')
     argparser.add_argument(
         '--generation',
