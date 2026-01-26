@@ -3,13 +3,30 @@ import numpy as np
 
 
 LANE_CLASS = 2
-mask = cv2.imread("mask_test4.png", cv2.IMREAD_GRAYSCALE)
+mask = cv2.imread("mask_test2.png", cv2.IMREAD_GRAYSCALE)
 h, w = mask.shape
 
 # Extract the lane info
 lane_mask = (mask == LANE_CLASS).astype(np.uint8)
 roi = lane_mask[int(0.6 * h):h, :]
+num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+    roi, connectivity=8
+)
+solid_lane_mask = np.zeros_like(roi)
+MIN_VERTICAL_SPAN = int(0.3 * roi.shape[0])
+MIN_PIXEL_COUNT = 150
 
+
+solid_components = []
+
+for i in range(1, num_labels):  # skip background
+    x, y, w, h, area = stats[i]
+
+    if h >= MIN_VERTICAL_SPAN and area >= MIN_PIXEL_COUNT:
+        solid_components.append(i)
+
+for label in solid_components:
+    solid_lane_mask[labels == label] = 1
 # 
 center_x = roi.shape[1] // 2
 lookahead_y = 0.3
@@ -22,7 +39,7 @@ right_pts = []
 visualise = np.zeros((roi.shape[0], roi.shape[1], 3), dtype=np.uint8)
 
 for y in range(roi.shape[0]):
-    xs = np.where(roi[y] > 0)[0]
+    xs = np.where(solid_lane_mask[y] > 0)[0]
     if len(xs) == 0:
         continue
 
@@ -47,8 +64,13 @@ else:
     left_fit = right_fit = center_fit = None
 
 
-target_x = np.polyval(center_fit, lookahead_y)
-steering_error = target_x - center_x
+if center_fit is not None and np.ndim(center_fit) == 1:
+    target_x = np.polyval(center_fit, lookahead_y)
+    steering_error = target_x - center_x
+else:
+    # Fallback: keep straight / last known center
+    target_x = center_x
+    steering_error = 0
 
 if center_fit is not None:
     for y in range(roi.shape[0]):
@@ -65,6 +87,18 @@ if center_fit is not None:
             visualise[y, right_x] = (0, 255, 0)
         if 0 <= center_x_fit < roi.shape[1]:
             visualise[y, center_x_fit] = (0, 0, 255)
+
+
+
+vis = np.zeros((roi.shape[0], roi.shape[1], 3), dtype=np.uint8)
+
+colors = np.random.randint(0, 255, (num_labels, 3))
+
+for i in range(1, num_labels):
+    vis[labels == i] = colors[i]
+
+cv2.imshow("Connected Lines Components", vis)
+cv2.imshow("Only Solid mask", solid_lane_mask * 255)
 
 
 # Draw Lookahead
