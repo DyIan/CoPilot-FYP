@@ -85,7 +85,7 @@ import torch.optim as optim
 import torch.nn as nn
 
 # Lane markings show up less so need to weight them to stop class imbalance
-weights = torch.tensor([1.0, 1.0, 4.0]).to(device)
+weights = torch.tensor([1.0, 1.0, 8.0]).to(device)
 criterion = nn.CrossEntropyLoss(weight=weights)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3)

@@ -1331,7 +1331,7 @@ class TrainingSensors(object):
 
     # Used for collecting data, just uncomment to save photos
     def rgb_callback(self, image):
-        
+        """
         frame = image.frame
 
         if frame not in self.frame_buffer:
@@ -1340,12 +1340,12 @@ class TrainingSensors(object):
         self.frame_buffer[frame]['rgb'] = image
 
         self.try_save(frame)
-        
+        """
         return
 
 
     def seg_callback(self, image):
-        
+        """
         frame = image.frame
 
         image.convert(carla.ColorConverter.CityScapesPalette)
@@ -1356,7 +1356,7 @@ class TrainingSensors(object):
         self.frame_buffer[frame]['seg'] = image
 
         self.try_save(frame)
-        
+        """
         return
 
     def try_save(self, frame):
