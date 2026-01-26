@@ -1431,13 +1431,15 @@ def game_loop(args):
         from speed_control import Speed_Control
         from dao import DAO
         from lane_detection import Lane_Detection
+        from lane_decision import Lane_Decision
 
         print("Setting up subscribers...")
         commander = Commander(world, world.player)
         object_detection = Object_Detection()
         dao = DAO(world.broker)
         speed_control = Speed_Control(world.broker)
-        lane_detection = Lane_Detection()
+        lane_detection = Lane_Detection(world.broker)
+        lane_decision = Lane_Decision(world.broker)
 
         commander.register(world.broker)
 
@@ -1446,6 +1448,7 @@ def game_loop(args):
         world.broker.subscribe("camera", object_detection.callback)
         world.broker.subscribe("speed", speed_control.speed_callback)
         world.broker.subscribe("camera", lane_detection.callback)
+
 
         # Pass the commander so it can update if actor gets destroyed
         controller = KeyboardControl(world, args.autopilot)

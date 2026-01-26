@@ -18,6 +18,7 @@ class Commander:
         broker.subscribe("keyboard", self.update_keyboard)
         broker.subscribe("speed_limiter", lambda command: self.update_feature("speed_limiter", command))    # Lambda takes the command as and arg so will call update_feature(speed_limiter, command)
         broker.subscribe("object", lambda command: self.update_feature("object", command))
+        broker.subscribe("steering_error", lambda error: self.update_feature("steering_error", error))
 
 
     def update_keyboard(self, command):

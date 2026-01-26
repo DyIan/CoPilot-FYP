@@ -44,7 +44,7 @@ class DAO:
             result = self.cursor.fetchone()
         
             if result:
-                print(result)
+                #print(result)
                 speed_limit = float(result[1])
                 self.broker.publish("speed_limit", speed_limit)
         except Exception as e:

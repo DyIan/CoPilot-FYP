@@ -3,7 +3,7 @@ import numpy as np
 
 
 LANE_CLASS = 2
-mask = cv2.imread("mask_test2.png", cv2.IMREAD_GRAYSCALE)
+mask = cv2.imread("mask_test.png", cv2.IMREAD_GRAYSCALE)
 h, w = mask.shape
 
 # Extract the lane info

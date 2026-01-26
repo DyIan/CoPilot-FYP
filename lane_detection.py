@@ -8,10 +8,11 @@ from enet import ENet
 
 
 class Lane_Detection:
-    def __init__(self):
+    def __init__(self, broker):
+        self.broker = broker
+
         self.image = None
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
         self.model_path = "best_enet.pth"
         
         self.model = ENet(num_classes=3)
@@ -65,6 +66,9 @@ class Lane_Detection:
 
         # Blend with original frame
         overlay = cv2.addWeighted(frame, 0.7, mask, 0.3, 0)
+        
+        # Publish the mask data
+        self.broker.publish("road_mask", mask_resize)
 
         cv2.imshow("Lane_Detector", overlay)
         cv2.waitKey(1)

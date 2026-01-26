@@ -18,7 +18,7 @@ class Speed_Control:
         
         speed = 3.6 * math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2)
         if speed > self.speed_limit:
-            print(self.speed_limit)
+            #print(self.speed_limit)
             command = carla.VehicleControl(throttle=0.0)
             self.broker.publish("speed_limiter", command)
         else:
