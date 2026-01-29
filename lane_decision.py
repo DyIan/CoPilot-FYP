@@ -130,7 +130,7 @@ class Lane_Decision:
         # Draw Lookahead
         y_px = int(lookahead_y * roi.shape[0])
         cv2.circle(visualise, (int(target_x), y_px), 5, (0, 255, 255), -1)
-        print(f"Steering Error: {steering_error}")
+        #print(f"Steering Error: {steering_error}")
 
         cv2.line(visualise, (center_x, 0), (center_x, roi.shape[0]), (255, 255, 255), 1)
 
@@ -143,8 +143,8 @@ class Lane_Decision:
 
         cv2.imshow("Connected Lines Components", resized_vis)
         cv2.imshow("Only Solid mask", resized_solid_mask * 255)
-        cv2.imshow("Steering", resized_visualise)
-        cv2.imshow("ALL", resized_roi * 255)
+        #cv2.imshow("Steering", resized_visualise)
+        #cv2.imshow("ALL", resized_roi * 255)
         cv2.waitKey(1)
 
         self.broker.publish("steering_error", steering_error)

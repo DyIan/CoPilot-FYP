@@ -70,7 +70,7 @@ class Lane_Detection:
         # Publish the mask data
         self.broker.publish("road_mask", mask_resize)
 
-        cv2.imshow("Lane_Detector", overlay)
+        #cv2.imshow("Lane_Detector", overlay)
         cv2.waitKey(1)
 
         

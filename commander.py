@@ -32,15 +32,32 @@ class Commander:
 
         self.features_commands[name] = command
 
+    def update_steering(self):
+        steering_amount = .5
+        steering_error = self.features_commands["steering_error"]
+        if steering_error > 200:
+            target = +steering_amount
+        elif steering_error < -200:
+            target = -steering_amount
+        else:
+            target = None
+
+        return target
+
+
 
     def apply_control(self):
         """ This is called when the loop has taken all commands and wants to move the car
         Later here we will do some calculation to decide which command to do"""
 
+        steering_command = self.update_steering()
         command = self.keyboard_command
 
         if self.features_commands["speed_limiter"] != None:
             command.throttle = 0.0
-        
+
+        if steering_command is not None:
+            command.steer = steering_command
+    
         self.player.apply_control(command)
 
