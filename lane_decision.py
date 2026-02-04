@@ -19,6 +19,49 @@ class Lane_Decision:
         
         self.mask = mask
 
+    def calculate_solid_boundary(self, x, y, h, w, center_x, roi):
+        Y_NEAR_CAR = int(0.75 * roi.shape[0])   # Only look at components where the y is close to the car
+        MARGIN = 10
+
+        bottom_y = y + h
+        if bottom_y < Y_NEAR_CAR:
+            return 0.0
+
+        comp_left = x
+        comp_right = x + w
+
+        # If component is on the left 
+        if comp_right <= center_x:
+            dist = (center_x - MARGIN) - comp_right
+
+            # Dist < 0 means its intruding over the line
+            if dist < 0:
+                intrude = -dist
+                return +intrude # Go right
+            return 0.0
+            
+
+        elif comp_left >= center_x:
+            dist = comp_left - (center_x + MARGIN)
+            if dist < 0:
+                intrude = -dist
+                return -intrude # Go left
+            return 0.0
+        
+        else:
+            # Your ontop of the line
+            overlap_left = center_x - comp_left
+            overlap_right = comp_right - center_x
+
+            if overlap_left > overlap_right:
+                # More overlap on left side so go right
+                error = +overlap_left
+            else:
+                # More overlap on right side so go left
+                error = -overlap_right
+
+        return error
+        
         
 
     def mask_to_decision(self, mask):
@@ -35,28 +78,44 @@ class Lane_Decision:
         lane_mask = (self.mask == LANE_CLASS).astype(np.uint8)
         roi = lane_mask[int(0.6 * h): h, :]
 
+        # Define where the center and lookahead will be
+        center_x = roi.shape[1] // 2
+        lookahead_y = 0.3
+
+        # roi is your binary lane mask in ROI (uint8 0/255)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+
+        # Connect small gaps (shadow breaks, patchy segmentation)
+        roi_closed = cv2.morphologyEx(roi, cv2.MORPH_CLOSE, kernel, iterations=1)
+
         # Find Connected Parts of Lane Lines
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(roi, connectivity=8)
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(roi_closed, connectivity=8)
         solid_lane_mask = np.zeros_like(roi)
         MIN_VERT_SPAN = int(0.5 * roi.shape[0])
         MIN_PIXEL = 200
         solid_components = []
+        solid_line_error = 0.0 # Default value
 
+       
         # Now filter out small lines
         for i in range(1, num_labels): # Skip the background
             x, y, w, h, area = stats[i]
 
             if h >= MIN_VERT_SPAN and area >= MIN_PIXEL:
                 solid_components.append(i)
-        
+
+                # Check or solids we are driving too close to
+                solid_line_error += self.calculate_solid_boundary(x, y, h, w, center_x, roi)
+
+
+        self.broker.publish("solid_intrusion", float(solid_line_error))
         # Add these big lines to the solid mask
         for label in solid_components:
             solid_lane_mask[labels == label] = 1
+            
 
         
-        # Define where the center and lookahead will be
-        center_x = roi.shape[1] // 2
-        lookahead_y = 0.3
+        
 
 
         # Define the pts of the closest left and right lines
@@ -100,6 +159,9 @@ class Lane_Decision:
             # Fallback: keep straight / last known center
             target_x = center_x
             steering_error = 0
+        
+        steering_error += solid_line_error
+        steering_error = float(np.clip(steering_error, -300, 300))  # Clamp Values 
 
 
         if center_fit is not None:
@@ -143,8 +205,8 @@ class Lane_Decision:
 
         cv2.imshow("Connected Lines Components", resized_vis)
         cv2.imshow("Only Solid mask", resized_solid_mask * 255)
-        #cv2.imshow("Steering", resized_visualise)
-        #cv2.imshow("ALL", resized_roi * 255)
+        cv2.imshow("Steering", resized_visualise)
+        cv2.imshow("ALL", resized_roi * 255)
         cv2.waitKey(1)
 
         self.broker.publish("steering_error", steering_error)

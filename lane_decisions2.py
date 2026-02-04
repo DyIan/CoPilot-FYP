@@ -3,7 +3,7 @@ import numpy as np
 
 
 LANE_CLASS = 2
-mask = cv2.imread("mask_test.png", cv2.IMREAD_GRAYSCALE)
+mask = cv2.imread("mask_test4.png", cv2.IMREAD_GRAYSCALE)
 h, w = mask.shape
 
 # Extract the lane info
@@ -13,23 +13,37 @@ num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
     roi, connectivity=8
 )
 solid_lane_mask = np.zeros_like(roi)
-MIN_VERTICAL_SPAN = int(0.3 * roi.shape[0])
-MIN_PIXEL_COUNT = 150
+MIN_SOLID_VERTICAL_SPAN = int(0.3 * roi.shape[0])
+MIN_SOLID_PIXEL_COUNT = 150
+
+dashed_lane_mask = np.zeros_like(roi)
+MIN_DASHED_VERTICAL_SPAN = int(0.1 * roi.shape[0])
+MIN_DASHED_PIXEL_COUNT = 20
+
 
 
 solid_components = []
+dashed_components = []
 
 for i in range(1, num_labels):  # skip background
     x, y, w, h, area = stats[i]
 
-    if h >= MIN_VERTICAL_SPAN and area >= MIN_PIXEL_COUNT:
+    if h >= MIN_SOLID_VERTICAL_SPAN and area >= MIN_SOLID_PIXEL_COUNT:
         solid_components.append(i)
+    elif h >= MIN_DASHED_VERTICAL_SPAN and area >= MIN_DASHED_PIXEL_COUNT:
+        dashed_components.append(i)
 
+# Created a solid lines mask
 for label in solid_components:
     solid_lane_mask[labels == label] = 1
-# 
+
+# Create a dashed lines mask
+for label in dashed_components:
+    dashed_lane_mask[labels == label] = 1
+
 center_x = roi.shape[1] // 2
 lookahead_y = 0.3
+
 
 
 ys = []
@@ -99,6 +113,7 @@ for i in range(1, num_labels):
 
 cv2.imshow("Connected Lines Components", vis)
 cv2.imshow("Only Solid mask", solid_lane_mask * 255)
+cv2.imshow("Only Dashed mask", dashed_lane_mask * 255)
 
 
 # Draw Lookahead
