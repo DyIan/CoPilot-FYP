@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import carla
 import torch
+import math
 from PIL import Image
 from torchvision import transforms
 from enet import ENet
@@ -62,7 +63,18 @@ class Lane_Decision:
 
         return error
         
-        
+    def component_angle(self, mask):
+        ys, xs = np.where(mask > 0)
+        if len(xs) < 20:
+            return None
+        pts = np.column_stack((xs.astype(np.float32), ys.astype(np.float32)))
+        pts -= pts.mean(axis=0, keepdims=True)
+
+        cov = np.cov(pts.T)
+        eigvals, eigvecs = np.linalg.eig(cov)
+        v = eigvecs[:, np.argmax(eigvals)] # Principal direction
+        angle = math.degrees(math.atan2(v[1], v[0]))  
+        return angle    # 0 Horizontal, 90 Vertical
 
     def mask_to_decision(self, mask):
         """ Runs everytime a new mask from the ENET comes in """
@@ -83,7 +95,7 @@ class Lane_Decision:
         lookahead_y = 0.3
 
         # roi is your binary lane mask in ROI (uint8 0/255)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10, 10))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
         # Connect small gaps (shadow breaks, patchy segmentation)
         roi_closed = cv2.morphologyEx(roi, cv2.MORPH_CLOSE, kernel, iterations=1)
@@ -95,17 +107,52 @@ class Lane_Decision:
         MIN_PIXEL = 200
         solid_components = []
         solid_line_error = 0.0 # Default value
+        MAX_WIDTH = 45
+        MAX_AREA_PER_H = 100
+        MAX_FILL_RATIO = 0.35
+        MIN_VERTICAL_ANGLE = 10.0
 
        
-        # Now filter out small lines
+        # Now filter out small lines, thick blobs, etc...
         for i in range(1, num_labels): # Skip the background
             x, y, w, h, area = stats[i]
+            
+            # Too small = Reject
+            if h < MIN_VERT_SPAN or area < MIN_PIXEL:
+                continue
+            
+            # Thiness Check
+            area_per_h = area / max(h, 1)
+            fill_ratio = area / max(w * h, 1)
 
-            if h >= MIN_VERT_SPAN and area >= MIN_PIXEL:
-                solid_components.append(i)
+            # if w > MAX_WIDTH:
+            #     continue
+            if area_per_h > MAX_AREA_PER_H:
+                print("MAX AREA PER H BLOCK")
+                continue
+            # if fill_ratio > MAX_FILL_RATIO:
+            #     print("Fill Ratio Blocks")
+            #     continue
 
-                # Check or solids we are driving too close to
-                solid_line_error += self.calculate_solid_boundary(x, y, h, w, center_x, roi)
+           
+            # Check Lines Orientation
+            temp_mask = (labels == i).astype(np.uint8)
+            angle = self.component_angle(temp_mask)
+            if angle is None:
+                print("ANGLE Blocks NONE")
+                continue
+
+            # Normalise Angle into [-90,90] and check if its vertical
+            angle_normalised = ((angle + 90) % 180) - 90
+            if abs(angle_normalised) < MIN_VERTICAL_ANGLE:
+                print("ANGLE Blocks")
+                continue
+
+            # If we got here. Its a lane line
+            solid_components.append(i)
+
+            # Check or solids we are driving too close to
+            solid_line_error += self.calculate_solid_boundary(x, y, h, w, center_x, roi)
 
 
         self.broker.publish("solid_intrusion", float(solid_line_error))
@@ -160,7 +207,6 @@ class Lane_Decision:
             target_x = center_x
             steering_error = 0
         
-        steering_error += solid_line_error
         steering_error = float(np.clip(steering_error, -300, 300))  # Clamp Values 
 
 
@@ -203,12 +249,13 @@ class Lane_Decision:
         resized_visualise = cv2.resize(visualise, display_size)
         resized_roi = cv2.resize(roi, display_size)
 
+        """
         cv2.imshow("Connected Lines Components", resized_vis)
         cv2.imshow("Only Solid mask", resized_solid_mask * 255)
         cv2.imshow("Steering", resized_visualise)
         cv2.imshow("ALL", resized_roi * 255)
         cv2.waitKey(1)
-
+        """
         self.broker.publish("steering_error", steering_error)
 
         

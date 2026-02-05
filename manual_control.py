@@ -1403,11 +1403,12 @@ def game_loop(args):
 
         sim_world = client.get_world()
         if args.sync:
+            print("Starting in SYNC MODE")
             original_settings = sim_world.get_settings()
             settings = sim_world.get_settings()
             if not settings.synchronous_mode:
                 settings.synchronous_mode = True
-            settings.fixed_delta_seconds = 0.05   
+            settings.fixed_delta_seconds = 0.05    
             sim_world.apply_settings(settings)
 
             traffic_manager = client.get_trafficmanager()
@@ -1484,7 +1485,7 @@ def game_loop(args):
             
             world.broker.publish("gps", (long, lat))
 
-            object_detection.process_image()
+            #object_detection.process_image()
             lane_detection.process_image()
             # Update both keyboard command and perception command
             #commander.update_keyboard(keyboard_command)

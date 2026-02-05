@@ -70,22 +70,22 @@ class Commander:
         if intrusion > HARD_PX and steer < 0.0:     # Need to go right
             steer = max(steer, 0.0) # block left steer
             throttle_power = 0.5    
-            print("HARD BLOCK OF LEFT")
+            #print("HARD BLOCK OF LEFT")
         elif intrusion < -HARD_PX and steer > 0.0:  # Need to go left
             steer = min(steer, 0.0) # block right steer
             throttle_power = 0.5
-            print("HARD BLOCK OF RIGHT")
+            #print("HARD BLOCK OF RIGHT")
 
 
         # EMERGENCY BLOCK: strong push otherway
         if intrusion > EMERGENCY_PX:
             steer = max(steer, +MAX_OVERRIDE)
             throttle_power = 0.0
-            print("Emergency BLOCK OF LEFT")
+            #print("Emergency BLOCK OF LEFT")
         elif intrusion < -EMERGENCY_PX:
             steer = min(steer, -MAX_OVERRIDE)
             throttle_power = 0.0
-            print("Emergency BLOCK OF RIGHT")
+            #print("Emergency BLOCK OF RIGHT")
         
         
         # Smooth it

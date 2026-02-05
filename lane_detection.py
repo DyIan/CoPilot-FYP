@@ -26,9 +26,9 @@ class Lane_Detection:
                                  std=[0.229, 0.224, 0.225]),
         ])
 
-        self.window = cv2.namedWindow("Lane_Detector", cv2.WINDOW_NORMAL)
+        #self.window = cv2.namedWindow("Lane_Detector", cv2.WINDOW_NORMAL)
 
-        cv2.resizeWindow("Lane_Detector", 600, 400)
+        #cv2.resizeWindow("Lane_Detector", 600, 400)
         print("Lane_Detection class initialized")
 
     def callback(self, image: carla.Image):
@@ -57,6 +57,7 @@ class Lane_Detection:
         # Resize Prediction
         mask_resize = cv2.resize(prediction.astype(np.uint8), (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_NEAREST)
 
+        """
         # Creating the overlay
         mask = np.zeros_like(frame)
 
@@ -66,7 +67,7 @@ class Lane_Detection:
 
         # Blend with original frame
         overlay = cv2.addWeighted(frame, 0.7, mask, 0.3, 0)
-        
+        """
         # Publish the mask data
         self.broker.publish("road_mask", mask_resize)
 
